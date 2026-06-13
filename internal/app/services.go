@@ -32,10 +32,16 @@ type CheckRequest struct {
 	Inputs json.RawMessage
 }
 
-// CheckResult is the pre-check outcome surfaced to the user.
+// CheckResult is the INDICATIVE pre-check outcome surfaced to the user (Surface B).
+//
+// ADR-001: this is NOT authoritative. Status is mapped from the indicative Verdict for the UI; a
+// promoted, decision-bearing assessment must still be backed by an official engine computation.
+// ADR-004: Verdict and Mitigations are indicative options, never guarantees.
 type CheckResult struct {
-	Result core.AssessmentResult
-	Status core.DefensibilityStatus
+	Result      core.AssessmentResult
+	Status      core.DefensibilityStatus // mapped from Verdict for the UI signal
+	Verdict     core.CheckVerdict        // coarse buildability triage from the pre-check
+	Mitigations []string                 // indicative mitigation options that fit the verdict
 }
 
 // CheckService is Surface B: the location checker / on-ramp into the monitor.

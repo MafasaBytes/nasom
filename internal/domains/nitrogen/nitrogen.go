@@ -35,6 +35,18 @@ type Domain struct {
 	versions  core.RuleVersionSource
 	caselaw   core.CaseLawSource
 	evaluator core.ImpactEvaluator
+	checker   core.LocationChecker // INDICATIVE Surface B pre-check; may be nil (monitor-only wiring)
+}
+
+// Option configures a Domain additively, so existing NewDomain / NewDomainWithSources callers keep
+// compiling unchanged. Options are applied after the base wiring.
+type Option func(*Domain)
+
+// WithLocationChecker attaches the INDICATIVE Surface B pre-check (core.LocationChecker). It is
+// additive: when unset, Domain.LocationChecker() returns nil, which is fine for monitor-only
+// wiring. The checker is gate-free and never authoritative (ADR-001).
+func WithLocationChecker(c core.LocationChecker) Option {
+	return func(d *Domain) { d.checker = c }
 }
 
 // New wires the nitrogen adapters together from real config (Connect base URL / API key, curated
@@ -51,19 +63,24 @@ func New( /* cfg Config */ ) *Domain {
 //
 // M2: this signature is unchanged on purpose (M1 callers/tests keep compiling). To expose the
 // release watcher and RvS source, use the additive NewDomainWithSources below.
-func NewDomain(engine core.CalculationEngine, thresholds ThresholdProvider, deltas VersionDeltaProvider, caselaw CaseLawScopeProvider, routes RouteDeriver, now func() time.Time) *Domain {
-	return &Domain{
+// opts is variadic and additive (default empty), so all existing M1–M3 callers keep compiling.
+func NewDomain(engine core.CalculationEngine, thresholds ThresholdProvider, deltas VersionDeltaProvider, caselaw CaseLawScopeProvider, routes RouteDeriver, now func() time.Time, opts ...Option) *Domain {
+	d := &Domain{
 		engine:    engine,
 		evaluator: NewImpactEvaluator(engine, thresholds, deltas, caselaw, routes, now),
 	}
+	for _, opt := range opts {
+		opt(d)
+	}
+	return d
 }
 
 // NewDomainWithSources is the additive M2 constructor: it wires the same evaluator as NewDomain and
 // ADDITIONALLY attaches the global RuleVersionSource (the AeriusReleaseWatcher) and CaseLawSource so
 // that domain.RuleVersionSource() / domain.CaseLawSource() are non-nil for the worker. Pass a nil
 // caselaw until M3; the worker only needs the version source in M2.
-func NewDomainWithSources(engine core.CalculationEngine, thresholds ThresholdProvider, deltas VersionDeltaProvider, caselaw CaseLawScopeProvider, routes RouteDeriver, now func() time.Time, versions core.RuleVersionSource, caselawSource core.CaseLawSource) *Domain {
-	d := NewDomain(engine, thresholds, deltas, caselaw, routes, now)
+func NewDomainWithSources(engine core.CalculationEngine, thresholds ThresholdProvider, deltas VersionDeltaProvider, caselaw CaseLawScopeProvider, routes RouteDeriver, now func() time.Time, versions core.RuleVersionSource, caselawSource core.CaseLawSource, opts ...Option) *Domain {
+	d := NewDomain(engine, thresholds, deltas, caselaw, routes, now, opts...)
 	d.versions = versions
 	d.caselaw = caselawSource
 	return d
@@ -74,6 +91,7 @@ func (d *Domain) CalculationEngine() core.CalculationEngine { return d.engine }
 func (d *Domain) RuleVersionSource() core.RuleVersionSource { return d.versions }
 func (d *Domain) CaseLawSource() core.CaseLawSource         { return d.caselaw }
 func (d *Domain) ImpactEvaluator() core.ImpactEvaluator     { return d.evaluator }
+func (d *Domain) LocationChecker() core.LocationChecker     { return d.checker }
 
 // ---- AeriusConnectEngine : core.CalculationEngine --------------------------
 //
