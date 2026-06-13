@@ -8,6 +8,7 @@ package nitrogen
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/houvast/houvast/internal/core"
@@ -16,11 +17,14 @@ import (
 // NitrogenInputs is the domain-specific input shape carried opaquely through core as json.RawMessage.
 // (Documented here so the schema lives with the domain.)
 type NitrogenInputs struct {
-	Natura2000Area   string  `json:"natura2000_area"`
-	DistanceKm       float64 `json:"distance_km"`
-	Homes            int     `json:"homes"`
-	CommercialM2     int     `json:"commercial_m2"`
-	BuildIntensity   float64 `json:"build_intensity"`
+	Natura2000Area string  `json:"natura2000_area"`
+	DistanceKm     float64 `json:"distance_km"`
+	Homes          int     `json:"homes"`
+	CommercialM2   int     `json:"commercial_m2"`
+	BuildIntensity float64 `json:"build_intensity"`
+	// Routes are the doctrinal offsetting routes this assessment relies on (e.g. "intern_salderen").
+	// Case-law evaluation matches a ruling's scope against these.
+	Routes []string `json:"routes,omitempty"`
 	// ... emission sources, coordinates, source heights, transport movements, etc.
 	// For the official path these are serialized into IMAER GML for AERIUS Connect.
 }
@@ -33,16 +37,43 @@ type Domain struct {
 	evaluator core.ImpactEvaluator
 }
 
-// New wires the nitrogen adapters together. The Connect base URL / API key come from config (cmd/).
+// New wires the nitrogen adapters together from real config (Connect base URL / API key, curated
+// dataset). Deferred until the Connect commercial-terms gate clears (ADR-001/002); it will build the
+// real engine + providers and delegate to NewDomain.
 func New( /* cfg Config */ ) *Domain {
-	panic("not implemented") // see docs/ROADMAP.md M1
+	panic("not implemented") // see docs/ROADMAP.md M1 + the Connect gate
 }
 
-func (d *Domain) Key() core.DomainKey                        { return core.DomainNitrogen }
-func (d *Domain) CalculationEngine() core.CalculationEngine  { return d.engine }
-func (d *Domain) RuleVersionSource() core.RuleVersionSource  { return d.versions }
-func (d *Domain) CaseLawSource() core.CaseLawSource          { return d.caselaw }
-func (d *Domain) ImpactEvaluator() core.ImpactEvaluator      { return d.evaluator }
+// NewDomain wires the nitrogen domain by dependency injection — used by the M1 motion and tests.
+// The engine is injected (a deterministic fake in tests; the real arms-length AeriusConnectEngine
+// once the gate clears). The reference providers are globally configured (ADR-009/010). The release
+// watcher and RvS source are not wired in M1 — OnChangeEvent only needs the evaluator (M2/M3).
+//
+// M2: this signature is unchanged on purpose (M1 callers/tests keep compiling). To expose the
+// release watcher and RvS source, use the additive NewDomainWithSources below.
+func NewDomain(engine core.CalculationEngine, thresholds ThresholdProvider, deltas VersionDeltaProvider, caselaw CaseLawScopeProvider, routes RouteDeriver, now func() time.Time) *Domain {
+	return &Domain{
+		engine:    engine,
+		evaluator: NewImpactEvaluator(engine, thresholds, deltas, caselaw, routes, now),
+	}
+}
+
+// NewDomainWithSources is the additive M2 constructor: it wires the same evaluator as NewDomain and
+// ADDITIONALLY attaches the global RuleVersionSource (the AeriusReleaseWatcher) and CaseLawSource so
+// that domain.RuleVersionSource() / domain.CaseLawSource() are non-nil for the worker. Pass a nil
+// caselaw until M3; the worker only needs the version source in M2.
+func NewDomainWithSources(engine core.CalculationEngine, thresholds ThresholdProvider, deltas VersionDeltaProvider, caselaw CaseLawScopeProvider, routes RouteDeriver, now func() time.Time, versions core.RuleVersionSource, caselawSource core.CaseLawSource) *Domain {
+	d := NewDomain(engine, thresholds, deltas, caselaw, routes, now)
+	d.versions = versions
+	d.caselaw = caselawSource
+	return d
+}
+
+func (d *Domain) Key() core.DomainKey                       { return core.DomainNitrogen }
+func (d *Domain) CalculationEngine() core.CalculationEngine { return d.engine }
+func (d *Domain) RuleVersionSource() core.RuleVersionSource { return d.versions }
+func (d *Domain) CaseLawSource() core.CaseLawSource         { return d.caselaw }
+func (d *Domain) ImpactEvaluator() core.ImpactEvaluator     { return d.evaluator }
 
 // ---- AeriusConnectEngine : core.CalculationEngine --------------------------
 //
@@ -55,24 +86,30 @@ type AeriusConnectEngine struct {
 	// httpClient, resultStore, ...
 }
 
+// ErrConnectGated is returned by AeriusConnectEngine.Compute until the AERIUS Connect adapter is
+// enabled. The real arms-length HTTP client (ADR-001) and IMAER GML marshalling are the GATED build,
+// blocked on the commercial-terms validation gate (ADR-001/002; see docs/ROADMAP.md). Returning a
+// clear sentinel — instead of panicking — lets the keep-alive worker degrade gracefully (ADR-002):
+// a recompute error leaves the assessment's status UNTOUCHED (the M1 path in MonitorService.
+// OnChangeEvent), never defaulting to defensible (ADR-004), instead of crashing the run.
+var ErrConnectGated = errors.New("aerius connect adapter not yet enabled (commercial-terms gate, ADR-001/002)")
+
 func (e *AeriusConnectEngine) Name() string { return "aerius-connect" }
 
+// Compute is the single gated dependency (ADR-009): the authoritative RIVM AERIUS Connect recompute.
+// Un-embedded by design — no real HTTP, no IMAER GML (that is the gated build, ADR-001). Until the
+// gate clears it returns ErrConnectGated so callers degrade gracefully rather than crash.
 func (e *AeriusConnectEngine) Compute(ctx context.Context, inputs json.RawMessage, version core.RuleVersionRef) (core.AssessmentResult, error) {
-	panic("not implemented") // M1: marshal NitrogenInputs -> IMAER GML -> Connect; persist result
+	// GATED (ADR-001/002): marshal NitrogenInputs -> IMAER GML -> Connect; persist result. Until the
+	// commercial-terms gate clears, surface a sentinel instead of a panic so the worker degrades.
+	return core.AssessmentResult{}, ErrConnectGated
 }
 
 // ---- AeriusReleaseWatcher : core.RuleVersionSource -------------------------
 //
-// Watches the (annual) AERIUS release. Emits ChangeEvent{Kind: ChangeRuleVersion} carrying the
-// version delta. Pair with the version-abstraction layer (ADR-003, see version/).
-type AeriusReleaseWatcher struct{}
-
-func (w *AeriusReleaseWatcher) Current(ctx context.Context) (core.RuleVersionRef, error) {
-	panic("not implemented") // M2
-}
-func (w *AeriusReleaseWatcher) Poll(ctx context.Context, since time.Time) ([]core.ChangeEvent, error) {
-	panic("not implemented") // M2
-}
+// Implemented in version_source.go (M2): a registry-backed watcher over the version-abstraction
+// layer (ADR-003, see version/). It emits THIN ChangeEvent{Kind: ChangeRuleVersion} per release
+// effective after `since`; assemble() looks up the curated delta + recomputes via Connect.
 
 // ---- RaadVanStateSource : core.CaseLawSource -------------------------------
 //
@@ -84,19 +121,8 @@ func (s *RaadVanStateSource) Poll(ctx context.Context, since time.Time) ([]core.
 	panic("not implemented") // M3
 }
 
-// ---- NitrogenImpactEvaluator : core.ImpactEvaluator ------------------------
-//
-// The heart of the product for nitrogen. For a rule-version change: recompute via the engine and
-// compare against the assessment's prior result/threshold -> Delta + status. For case law: match the
-// ruling scope (e.g. "relies on intern salderen") against the assessment's route -> status + action.
-type NitrogenImpactEvaluator struct {
-	engine core.CalculationEngine
-	// version mappings, threshold rules, caselaw scope matchers
-}
-
-func (ev *NitrogenImpactEvaluator) Evaluate(ctx context.Context, a core.Assessment, e core.ChangeEvent) (core.Finding, error) {
-	panic("not implemented") // M1 (version path) / M3 (case-law path)
-}
+// NitrogenImpactEvaluator (core.ImpactEvaluator) — the heart of the product — lives in evaluator.go,
+// split into a pure judge() and an I/O assemble() per ADR-009.
 
 // Compile-time assertions that the adapters satisfy the core ports.
 var (
