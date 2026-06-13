@@ -76,7 +76,7 @@ func buildWorld(t *testing.T, engine core.CalculationEngine) (*worker.Worker, *m
 	// The in-memory AssessmentRepository also serves as the app.TenantScope (IDs-only enumeration).
 	svc := app.NewMonitorService(registry, assessments, assessments, portfolio, findings, changes, notifier)
 
-	w := worker.New(core.DomainNitrogen, []core.RuleVersionSource{watcher}, changes, svc, assessments)
+	w := worker.New(core.DomainNitrogen, []core.RuleVersionSource{watcher}, nil, changes, svc, assessments)
 	return w, assessments, findings, notifier, changes
 }
 
@@ -138,7 +138,7 @@ func TestRunOnce_KeepAliveFlip_And_TenantIsolation(t *testing.T) {
 	changes := memory.NewChangeEventRepository()
 	notifier := memory.NewNotifier()
 	svc := app.NewMonitorService(registry, assessments, assessments, portfolio, findings, changes, notifier)
-	w := worker.New(core.DomainNitrogen, []core.RuleVersionSource{watcher}, changes, svc, assessments)
+	w := worker.New(core.DomainNitrogen, []core.RuleVersionSource{watcher}, nil, changes, svc, assessments)
 
 	seedTenant(t, assessments, portfolio, "tenantA", "Veluwe", 5_000_000)     // will flip to exposed
 	seedTenant(t, assessments, portfolio, "tenantB", "Rijntakken", 9_000_000) // stays defensible
@@ -314,7 +314,7 @@ func TestRunOnce_GatedEngine_DegradesGracefully(t *testing.T) {
 	changes := memory.NewChangeEventRepository()
 	notifier := memory.NewNotifier()
 	svc := app.NewMonitorService(registry, assessments, assessments, portfolio, findings, changes, notifier)
-	w := worker.New(core.DomainNitrogen, []core.RuleVersionSource{watcher}, changes, svc, assessments)
+	w := worker.New(core.DomainNitrogen, []core.RuleVersionSource{watcher}, nil, changes, svc, assessments)
 
 	inputs, _ := json.Marshal(nitrogen.NitrogenInputs{Natura2000Area: "Veluwe"})
 	if err := portfolio.SaveAsset(ctx, core.Asset{ID: "asset-tenantA", TenantID: "tenantA", Domain: core.DomainNitrogen, CapitalAtRiskEUR: 5_000_000}); err != nil {

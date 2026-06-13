@@ -113,13 +113,10 @@ func (e *AeriusConnectEngine) Compute(ctx context.Context, inputs json.RawMessag
 
 // ---- RaadVanStateSource : core.CaseLawSource -------------------------------
 //
-// Ingests Raad van State rulings + a curated mapping of doctrine changes to machine-actionable scope
-// (start with intern salderen, 18 Dec 2024). The mapping is core IP — see DECISIONS open questions.
-type RaadVanStateSource struct{}
-
-func (s *RaadVanStateSource) Poll(ctx context.Context, since time.Time) ([]core.ChangeEvent, error) {
-	panic("not implemented") // M3
-}
+// Implemented in caselaw_source.go (M3): a registry-backed source over the case-law-abstraction layer
+// (see caselaw/). It emits THIN ChangeEvent{Kind: ChangeCaseLaw} per curated ruling effective after a
+// watermark; assemble() looks up the curated scope by Ref (the ECLI). The case-law path is gate-free —
+// it never calls Connect (status flips from the route predicate + retroactivity in judge()).
 
 // NitrogenImpactEvaluator (core.ImpactEvaluator) — the heart of the product — lives in evaluator.go,
 // split into a pure judge() and an I/O assemble() per ADR-009.

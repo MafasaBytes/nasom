@@ -45,27 +45,30 @@ type Result struct {
 //
 // It holds only core ports + app types — no concrete infrastructure.
 type Worker struct {
-	sources []core.RuleVersionSource
-	changes core.ChangeEventRepository
-	monitor app.MonitorService
-	tenants app.TenantScope
-	// domain is the domain whose rule-version watermark this worker advances. M2 ships nitrogen only
-	// (ADR-007); a multi-domain worker is a later, additive change. It is a core.DomainKey constant,
-	// not a domain-package import, so the layer boundary holds.
+	sources        []core.RuleVersionSource
+	caseLawSources []core.CaseLawSource
+	changes        core.ChangeEventRepository
+	monitor        app.MonitorService
+	tenants        app.TenantScope
+	// domain is the domain whose change-event watermarks this worker advances. M2/M3 ship nitrogen
+	// only (ADR-007); a multi-domain worker is a later, additive change. It is a core.DomainKey
+	// constant, not a domain-package import, so the layer boundary holds.
 	domain core.DomainKey
 }
 
-// New constructs a Worker. The sources are the global RuleVersionSource(s) (e.g. the AERIUS release
-// watcher) — change events are global, not tenant-scoped (ADR-011); composition injects them. The
-// domain names the vertical whose rule-version watermark this worker advances (core.DomainNitrogen
-// in M2).
-func New(domain core.DomainKey, sources []core.RuleVersionSource, changes core.ChangeEventRepository, monitor app.MonitorService, tenants app.TenantScope) *Worker {
+// New constructs a Worker. The rule-version and case-law sources are the global change-event
+// sources (e.g. the AERIUS release watcher and the Raad van State source) — change events are
+// global, not tenant-scoped (ADR-011); composition injects them. The two source families each poll
+// with their OWN watermark (LastIngested keyed per ChangeKind) so they advance independently. The
+// domain names the vertical whose watermarks this worker advances (core.DomainNitrogen in M2/M3).
+func New(domain core.DomainKey, sources []core.RuleVersionSource, caseLawSources []core.CaseLawSource, changes core.ChangeEventRepository, monitor app.MonitorService, tenants app.TenantScope) *Worker {
 	return &Worker{
-		sources: sources,
-		changes: changes,
-		monitor: monitor,
-		tenants: tenants,
-		domain:  domain,
+		sources:        sources,
+		caseLawSources: caseLawSources,
+		changes:        changes,
+		monitor:        monitor,
+		tenants:        tenants,
+		domain:         domain,
 	}
 }
 
@@ -87,36 +90,39 @@ func New(domain core.DomainKey, sources []core.RuleVersionSource, changes core.C
 func (w *Worker) RunOnce(ctx context.Context) (Result, error) {
 	res := Result{Snapshots: map[core.TenantID]core.ExposureSnapshot{}}
 
-	// (1) Watermark for incremental polling. A read failure here is fatal to the cycle: polling from
-	// an unknown `since` would risk reprocessing or skipping; surface it so the caller can retry.
-	since, err := w.changes.LastIngested(ctx, w.domain, core.ChangeRuleVersion)
+	// (1) Watermarks for incremental polling — ONE PER ChangeKind so the two source families advance
+	// independently (a case-law ruling and a version release are tracked on separate watermarks). A
+	// read failure here is fatal to that family's cycle: polling from an unknown `since` would risk
+	// reprocessing or skipping; surface it so the caller can retry.
+	sinceVersion, err := w.changes.LastIngested(ctx, w.domain, core.ChangeRuleVersion)
 	if err != nil {
 		return res, fmt.Errorf("read last-ingested watermark for %s/%s: %w", w.domain, core.ChangeRuleVersion, err)
+	}
+	sinceCaseLaw, err := w.changes.LastIngested(ctx, w.domain, core.ChangeCaseLaw)
+	if err != nil {
+		return res, fmt.Errorf("read last-ingested watermark for %s/%s: %w", w.domain, core.ChangeCaseLaw, err)
 	}
 
 	// affected tracks tenants that produced at least one finding this cycle (set semantics).
 	affected := map[core.TenantID]struct{}{}
 
-	// (2)+(3) Poll each source and drive each emitted event through the monitor fan-out.
+	// (2)+(3) Poll each source (both families) and drive each emitted event through the monitor
+	// fan-out. Rule-version events recompute via the (gated) engine; case-law events are gate-free.
 	for _, src := range w.sources {
-		events, err := src.Poll(ctx, since)
+		events, err := src.Poll(ctx, sinceVersion)
 		if err != nil {
 			res.Errors = append(res.Errors, fmt.Errorf("poll rule-version source: %w", err))
 			continue // a bad source must not stop the others
 		}
-		for _, e := range events {
-			res.Events = append(res.Events, e)
-			findings, err := w.monitor.OnChangeEvent(ctx, e)
-			if err != nil {
-				// Collected, never fatal: the gated engine surfaces ErrConnectGated per assessment
-				// here, and the monitor has already left those statuses untouched (ADR-002/004).
-				res.Errors = append(res.Errors, fmt.Errorf("ingest event %s (%s): %w", e.Ref, e.ID, err))
-			}
-			for _, f := range findings {
-				res.Findings = append(res.Findings, f)
-				affected[f.TenantID] = struct{}{}
-			}
+		w.dispatch(ctx, events, &res, affected)
+	}
+	for _, src := range w.caseLawSources {
+		events, err := src.Poll(ctx, sinceCaseLaw)
+		if err != nil {
+			res.Errors = append(res.Errors, fmt.Errorf("poll case-law source: %w", err))
+			continue // a bad source must not stop the others
 		}
+		w.dispatch(ctx, events, &res, affected)
 	}
 
 	// (4)+(5) Build a post-ingest exposure snapshot for tenants that had findings. We restrict to
@@ -146,4 +152,22 @@ func (w *Worker) RunOnce(ctx context.Context) (Result, error) {
 	}
 
 	return res, nil
+}
+
+// dispatch drives a batch of emitted events through the monitor fan-out, appending the events and any
+// findings to res and recording which tenants were affected. Per-event errors are collected, never
+// fatal: the gated engine surfaces ErrConnectGated per assessment here for rule-version events, and the
+// monitor has already left those statuses untouched (ADR-002/004); case-law events are gate-free.
+func (w *Worker) dispatch(ctx context.Context, events []core.ChangeEvent, res *Result, affected map[core.TenantID]struct{}) {
+	for _, e := range events {
+		res.Events = append(res.Events, e)
+		findings, err := w.monitor.OnChangeEvent(ctx, e)
+		if err != nil {
+			res.Errors = append(res.Errors, fmt.Errorf("ingest event %s (%s): %w", e.Ref, e.ID, err))
+		}
+		for _, f := range findings {
+			res.Findings = append(res.Findings, f)
+			affected[f.TenantID] = struct{}{}
+		}
+	}
 }

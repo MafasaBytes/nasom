@@ -1,16 +1,22 @@
 // Command worker is the composition root for the Houvast keep-alive engine (M2). It wires the full
 // hexagon with in-memory infrastructure and runs ONE ingest cycle, then logs what happened.
 //
-// This is the ONLY place in the M2 backend that may import every layer (core, app, the nitrogen
-// domain, the version layer, and the memory adapters): the composition root assembles the graph; the
+// This is the ONLY place in the backend that may import every layer (core, app, the nitrogen domain,
+// the version + caselaw layers, and the memory adapters): the composition root assembles the graph; the
 // reusable driver (internal/worker) stays engine-agnostic. See docs/ARCHITECTURE.md.
 //
-// GATE-FREE BY DESIGN (ADR-001/002): the real AERIUS Connect engine is un-embedded and its Compute
-// returns nitrogen.ErrConnectGated until the commercial-terms gate clears. So this run does NOT
-// produce findings — instead it demonstrates graceful degradation: the release IS detected, every
-// per-assessment recompute surfaces "Connect gated", and every assessment's status is left UNTOUCHED
-// (ADR-002/004). `go run ./cmd/worker` runs to completion WITHOUT panicking; the gated errors are
-// logged as expected, not as a crash.
+// TWO CHANGE PATHS (M3):
+//   - VERSION PATH — GATED (ADR-001/002): the real AERIUS Connect engine is un-embedded and its Compute
+//     returns nitrogen.ErrConnectGated until the commercial-terms gate clears. The 2025 release IS
+//     detected, but every per-assessment recompute surfaces "Connect gated" and every status is left
+//     UNTOUCHED (ADR-002/004) — graceful degradation, not a crash.
+//   - CASE-LAW PATH — GATE-FREE (M3): the curated Raad van State ruling ECLI:NL:RVS:2024:4923 (intern
+//     salderen weer vergunningplichtig) is detected and produces a REAL flip to EXPOSED for every
+//     assessment relying on the `intern_salderen` route — no Connect, no recompute. judge() decides
+//     from the route predicate + retroactivity alone.
+//
+// `go run ./cmd/worker` runs to completion WITHOUT panicking: it shows the real case-law flip(s) to
+// exposed alongside the expected (logged, not fatal) gated-version degradation.
 package main
 
 import (
@@ -25,6 +31,7 @@ import (
 	"github.com/houvast/houvast/internal/app"
 	"github.com/houvast/houvast/internal/core"
 	"github.com/houvast/houvast/internal/domains/nitrogen"
+	"github.com/houvast/houvast/internal/domains/nitrogen/caselaw"
 	"github.com/houvast/houvast/internal/domains/nitrogen/version"
 	"github.com/houvast/houvast/internal/worker"
 )
@@ -51,6 +58,15 @@ func main() {
 	releaseWatcher := nitrogen.NewAeriusReleaseWatcher(reg, clock) // core.RuleVersionSource (deterministic IngestedAt)
 	deltaProvider := nitrogen.NewRegistryVersionDeltaProvider(reg) // real-path nitrogen.VersionDeltaProvider
 
+	// ---- Case-law layer (M3, ADR-009) ---------------------------------------------------------
+	// The curated Raad van State ruling->scope mapping (core IP — docs/regulatory/intern-salderen-2024.md).
+	// The case-law path is GATE-FREE: rvsSource emits a thin ChangeCaseLaw event per ruling, and
+	// caseLawScopes maps it to the curated CaseLawScope by ECLI. No Connect, no recompute — judge()
+	// flips status from the route predicate (intern_salderen) + retroactivity alone.
+	caselawReg := caselaw.NewRegistry()                                   // curated ECLI:NL:RVS:2024:4923
+	rvsSource := nitrogen.NewRaadVanStateSource(caselawReg, clock)        // core.CaseLawSource (deterministic IngestedAt)
+	caseLawScopes := nitrogen.NewRegistryCaseLawScopeProvider(caselawReg) // real-path nitrogen.CaseLawScopeProvider
+
 	// Global, single-config KDW thresholds (same for every tenant — ADR-009/010). A permissive
 	// default keeps the dev seed simple; real curated KDW data is a later swap behind this same port.
 	thresholds := nitrogen.StaticThresholdProvider{
@@ -67,17 +83,18 @@ func main() {
 	// (ADR-001/002). This is what makes the M2 run degrade gracefully instead of producing findings.
 	engine := &nitrogen.AeriusConnectEngine{}
 
-	// Wire the nitrogen domain WITH sources so domain.RuleVersionSource() is non-nil (M2 additive
-	// constructor). caselaw scope provider + RvS source are M3 — pass nils where allowed.
+	// Wire the nitrogen domain WITH both sources (M3): the gated version path (releaseWatcher +
+	// gated engine) AND the gate-free case-law path (rvsSource + caseLawScopes). domain.CaseLawSource()
+	// is now non-nil so the worker drives the Raad van State source.
 	domain := nitrogen.NewDomainWithSources(
 		engine,
 		thresholds,
 		deltaProvider,
-		nil, // CaseLawScopeProvider — M3
+		caseLawScopes, // CaseLawScopeProvider (M3, registry-backed)
 		nitrogen.InputsRouteDeriver{},
 		clock,
 		releaseWatcher,
-		nil, // core.CaseLawSource — M3
+		rvsSource, // core.CaseLawSource (M3)
 	)
 
 	registry := app.NewRegistry(domain)
@@ -104,6 +121,7 @@ func main() {
 	w := worker.New(
 		core.DomainNitrogen,
 		[]core.RuleVersionSource{releaseWatcher},
+		[]core.CaseLawSource{rvsSource}, // M3: the gate-free Raad van State case-law source
 		changes,
 		monitor,
 		assessments, // app.TenantScope
