@@ -8,6 +8,7 @@ package nitrogen
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/houvast/houvast/internal/core"
@@ -47,11 +48,25 @@ func New( /* cfg Config */ ) *Domain {
 // The engine is injected (a deterministic fake in tests; the real arms-length AeriusConnectEngine
 // once the gate clears). The reference providers are globally configured (ADR-009/010). The release
 // watcher and RvS source are not wired in M1 — OnChangeEvent only needs the evaluator (M2/M3).
+//
+// M2: this signature is unchanged on purpose (M1 callers/tests keep compiling). To expose the
+// release watcher and RvS source, use the additive NewDomainWithSources below.
 func NewDomain(engine core.CalculationEngine, thresholds ThresholdProvider, deltas VersionDeltaProvider, caselaw CaseLawScopeProvider, routes RouteDeriver, now func() time.Time) *Domain {
 	return &Domain{
 		engine:    engine,
 		evaluator: NewImpactEvaluator(engine, thresholds, deltas, caselaw, routes, now),
 	}
+}
+
+// NewDomainWithSources is the additive M2 constructor: it wires the same evaluator as NewDomain and
+// ADDITIONALLY attaches the global RuleVersionSource (the AeriusReleaseWatcher) and CaseLawSource so
+// that domain.RuleVersionSource() / domain.CaseLawSource() are non-nil for the worker. Pass a nil
+// caselaw until M3; the worker only needs the version source in M2.
+func NewDomainWithSources(engine core.CalculationEngine, thresholds ThresholdProvider, deltas VersionDeltaProvider, caselaw CaseLawScopeProvider, routes RouteDeriver, now func() time.Time, versions core.RuleVersionSource, caselawSource core.CaseLawSource) *Domain {
+	d := NewDomain(engine, thresholds, deltas, caselaw, routes, now)
+	d.versions = versions
+	d.caselaw = caselawSource
+	return d
 }
 
 func (d *Domain) Key() core.DomainKey                       { return core.DomainNitrogen }
@@ -71,24 +86,30 @@ type AeriusConnectEngine struct {
 	// httpClient, resultStore, ...
 }
 
+// ErrConnectGated is returned by AeriusConnectEngine.Compute until the AERIUS Connect adapter is
+// enabled. The real arms-length HTTP client (ADR-001) and IMAER GML marshalling are the GATED build,
+// blocked on the commercial-terms validation gate (ADR-001/002; see docs/ROADMAP.md). Returning a
+// clear sentinel — instead of panicking — lets the keep-alive worker degrade gracefully (ADR-002):
+// a recompute error leaves the assessment's status UNTOUCHED (the M1 path in MonitorService.
+// OnChangeEvent), never defaulting to defensible (ADR-004), instead of crashing the run.
+var ErrConnectGated = errors.New("aerius connect adapter not yet enabled (commercial-terms gate, ADR-001/002)")
+
 func (e *AeriusConnectEngine) Name() string { return "aerius-connect" }
 
+// Compute is the single gated dependency (ADR-009): the authoritative RIVM AERIUS Connect recompute.
+// Un-embedded by design — no real HTTP, no IMAER GML (that is the gated build, ADR-001). Until the
+// gate clears it returns ErrConnectGated so callers degrade gracefully rather than crash.
 func (e *AeriusConnectEngine) Compute(ctx context.Context, inputs json.RawMessage, version core.RuleVersionRef) (core.AssessmentResult, error) {
-	panic("not implemented") // M1: marshal NitrogenInputs -> IMAER GML -> Connect; persist result
+	// GATED (ADR-001/002): marshal NitrogenInputs -> IMAER GML -> Connect; persist result. Until the
+	// commercial-terms gate clears, surface a sentinel instead of a panic so the worker degrades.
+	return core.AssessmentResult{}, ErrConnectGated
 }
 
 // ---- AeriusReleaseWatcher : core.RuleVersionSource -------------------------
 //
-// Watches the (annual) AERIUS release. Emits ChangeEvent{Kind: ChangeRuleVersion} carrying the
-// version delta. Pair with the version-abstraction layer (ADR-003, see version/).
-type AeriusReleaseWatcher struct{}
-
-func (w *AeriusReleaseWatcher) Current(ctx context.Context) (core.RuleVersionRef, error) {
-	panic("not implemented") // M2
-}
-func (w *AeriusReleaseWatcher) Poll(ctx context.Context, since time.Time) ([]core.ChangeEvent, error) {
-	panic("not implemented") // M2
-}
+// Implemented in version_source.go (M2): a registry-backed watcher over the version-abstraction
+// layer (ADR-003, see version/). It emits THIN ChangeEvent{Kind: ChangeRuleVersion} per release
+// effective after `since`; assemble() looks up the curated delta + recomputes via Connect.
 
 // ---- RaadVanStateSource : core.CaseLawSource -------------------------------
 //
