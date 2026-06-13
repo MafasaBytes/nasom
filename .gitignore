@@ -1,0 +1,30 @@
+# Go
+/bin/
+*.exe
+*.test
+*.out
+vendor/
+ 
+# Node / web
+web/node_modules/
+web/dist/
+web/.next/
+*.log
+ 
+# Env / secrets (AERIUS Connect API key, DB creds, etc. never commit)
+.env
+.env.*
+*.local
+ 
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# docs
+# Internal docs — kept on disk for local context
+# but never committed to the repo. Includes engineering docs, market research, and the demo.
+docs/
+CLAUDE.md
+.CLAUDE.md
+.claude
