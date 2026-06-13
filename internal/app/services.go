@@ -10,6 +10,19 @@ import (
 	"github.com/houvast/houvast/internal/core"
 )
 
+// PortfolioProject is the per-asset read model for the monitor dashboard (Surface A): one monitored
+// asset joined with its most recent assessment (status + capital + headline) and the latest finding
+// produced against it ("what changed"). It is a READ MODEL assembled in the app layer from the
+// tenant-scoped repositories — it adds no new core entity and crosses no tenant boundary (ADR-006).
+//
+// LatestAssessment / LatestFinding are pointers because an asset may have neither yet (e.g. just
+// created via Promote before any change event has been evaluated). Callers must nil-check.
+type PortfolioProject struct {
+	Asset            core.Asset
+	LatestAssessment *core.Assessment
+	LatestFinding    *core.Finding
+}
+
 // MonitorService is Surface A: the defensibility monitor.
 type MonitorService interface {
 	// OnChangeEvent fans a ChangeEvent across all affected assessments in the relevant domain,
@@ -19,6 +32,11 @@ type MonitorService interface {
 
 	// PortfolioExposure returns the current exposure snapshot for a tenant (dashboard rollup).
 	PortfolioExposure(ctx context.Context, t core.TenantID) (core.ExposureSnapshot, error)
+
+	// Portfolio returns the tenant's monitored projects (asset + latest assessment + latest finding)
+	// for the dashboard read model. Strictly tenant-scoped (ADR-006): it only reads through the
+	// tenant-scoped repositories and never touches another tenant's data.
+	Portfolio(ctx context.Context, t core.TenantID) ([]PortfolioProject, error)
 
 	// FindingsForAssessment returns the change history/explanations for one assessment (drawer view).
 	FindingsForAssessment(ctx context.Context, t core.TenantID, id core.AssessmentID) ([]core.Finding, error)

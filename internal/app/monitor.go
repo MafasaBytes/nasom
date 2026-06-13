@@ -153,6 +153,65 @@ func (s *monitorService) PortfolioExposure(ctx context.Context, t core.TenantID)
 	return snap, nil
 }
 
+// Portfolio assembles the dashboard read model for a tenant: every monitored asset joined with its
+// most recent assessment and the latest finding produced against that assessment. It reads ONLY
+// through the tenant-scoped repositories (ADR-006) — there is no cross-tenant access. The join is
+// done in app (not a new repo method) so the core repository ports stay minimal.
+func (s *monitorService) Portfolio(ctx context.Context, t core.TenantID) ([]PortfolioProject, error) {
+	assets, err := s.portfolio.ListAssets(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+
+	// Index this tenant's findings by assessment so we can attach the latest one per asset without an
+	// extra repo round-trip per assessment. Tenant-scoped read only (ADR-006).
+	allFindings, err := s.findings.ListByTenant(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	latestFindingByAssessment := make(map[core.AssessmentID]core.Finding, len(allFindings))
+	for _, f := range allFindings {
+		if prev, ok := latestFindingByAssessment[f.AssessmentID]; !ok || f.EvaluatedAt.After(prev.EvaluatedAt) {
+			latestFindingByAssessment[f.AssessmentID] = f
+		}
+	}
+
+	out := make([]PortfolioProject, 0, len(assets))
+	for _, a := range assets {
+		proj := PortfolioProject{Asset: a}
+
+		assessments, err := s.assessments.ListByAsset(ctx, t, a.ID)
+		if err != nil {
+			return nil, err
+		}
+		if latest := latestAssessment(assessments); latest != nil {
+			proj.LatestAssessment = latest
+			if f, ok := latestFindingByAssessment[latest.ID]; ok {
+				fCopy := f
+				proj.LatestFinding = &fCopy
+			}
+		}
+		out = append(out, proj)
+	}
+	return out, nil
+}
+
+// latestAssessment returns a copy of the most recently created assessment in the slice, or nil if
+// the slice is empty. (An asset just promoted via Surface B may have exactly one; a re-computed one
+// may have several.)
+func latestAssessment(assessments []core.Assessment) *core.Assessment {
+	if len(assessments) == 0 {
+		return nil
+	}
+	latest := assessments[0]
+	for _, a := range assessments[1:] {
+		if a.CreatedAt.After(latest.CreatedAt) {
+			latest = a
+		}
+	}
+	return &latest
+}
+
 // FindingsForAssessment returns the change history for one assessment (drawer view).
 func (s *monitorService) FindingsForAssessment(ctx context.Context, t core.TenantID, id core.AssessmentID) ([]core.Finding, error) {
 	return s.findings.ListByAssessment(ctx, t, id)
