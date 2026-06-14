@@ -63,6 +63,9 @@ func (s *RaadVanStateSource) Poll(ctx context.Context, since time.Time) ([]core.
 	var out []core.ChangeEvent
 	for _, r := range s.registry.Since(since) { // ascending ruling-date order
 		out = append(out, core.ChangeEvent{
+			// The ECLI is a stable, unique identifier — use it as the event id so events don't
+			// collide on a "" key in the repository and Findings can reliably reference their ruling.
+			ID:          core.ChangeEventID(r.ECLI),
 			Domain:      core.DomainNitrogen,
 			Kind:        core.ChangeCaseLaw,
 			Ref:         r.ECLI, // MUST equal the scope-provider key — assemble() looks up scope by Ref

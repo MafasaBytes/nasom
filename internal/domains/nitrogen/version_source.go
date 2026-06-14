@@ -75,6 +75,9 @@ func (w *AeriusReleaseWatcher) Poll(ctx context.Context, since time.Time) ([]cor
 			summary = d.Summary
 		}
 		out = append(out, core.ChangeEvent{
+			// Stable, deterministic id per release so events don't collide on a "" key in the
+			// repository and Findings can reliably reference their change event.
+			ID:          core.ChangeEventID("aerius-release-" + rel.VersionKey),
 			Domain:      core.DomainNitrogen,
 			Kind:        core.ChangeRuleVersion,
 			Ref:         rel.Label,
