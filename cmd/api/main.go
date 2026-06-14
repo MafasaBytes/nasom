@@ -111,6 +111,17 @@ func main() {
 		&counterIDs{prefix: "promoted"},
 	)
 
+	// CSV portfolio import (ADR-010 MVP cut). The nitrogen parser is injected here (the composition
+	// root) so the app.ImportService — and the whole app layer — never imports the nitrogen package.
+	// Imports are gate-free: they record the consultant's existing assessments (EngineRef="imported",
+	// status defensible), then the monitor re-evaluates them on change events like any other.
+	importer := app.NewImportService(
+		nitrogen.NewPortfolioCSVParser(),
+		portfolioRepo,
+		assessments,
+		clockFunc(clock),
+	)
+
 	// ---- DEV SEED ----------------------------------------------------------------------------------
 	// A small dev portfolio so the API serves non-empty data: assessments across 2 tenants, each
 	// AuthoredBy a CUSTOMER/CONSULTANT of record (ADR-004 — never Houvast), some relying on
@@ -129,7 +140,7 @@ func main() {
 		assessments, // app.TenantScope
 	)
 
-	handler := httpapi.NewRouter(monitor, check, w, logger)
+	handler := httpapi.NewRouter(monitor, check, importer, w, logger)
 
 	addr := ":" + port()
 	logger.Printf("api: listening on %s (clock=%s, AERIUS Connect GATED — version path degrades, case-law path live)",

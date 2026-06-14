@@ -134,6 +134,21 @@ type ingestResponseDTO struct {
 	Errors    []string              `json:"errors"`
 }
 
+// importResultDTO is the result of POST /api/import: how many assessments were recorded, the asset
+// ids touched, and the per-row errors (skipped rows). Mirrors app.ImportResult (ADR-010).
+type importResultDTO struct {
+	Imported int           `json:"imported"`
+	AssetIDs []string      `json:"assetIds"`
+	Errors   []rowErrorDTO `json:"errors"`
+}
+
+// rowErrorDTO names a skipped CSV row: its 1-based source line (header = line 1; 0 if unknown) and a
+// safe, caller-facing reason. ADR-004: nothing here promises guarantees.
+type rowErrorDTO struct {
+	Line   int    `json:"line"`
+	Reason string `json:"reason"`
+}
+
 type changeEventDTO struct {
 	ID          string `json:"id"`
 	Domain      string `json:"domain"`
@@ -237,6 +252,18 @@ func toCheckResultDTO(r app.CheckResult) checkResultDTO {
 		Verdict:     string(r.Verdict),
 		Mitigations: mits,
 	}
+}
+
+func toImportResultDTO(r app.ImportResult) importResultDTO {
+	ids := make([]string, 0, len(r.AssetIDs))
+	for _, id := range r.AssetIDs {
+		ids = append(ids, string(id))
+	}
+	errs := make([]rowErrorDTO, 0, len(r.Errors))
+	for _, e := range r.Errors {
+		errs = append(errs, rowErrorDTO{Line: e.Line, Reason: e.Reason})
+	}
+	return importResultDTO{Imported: r.Imported, AssetIDs: ids, Errors: errs}
 }
 
 func toChangeEventDTO(e core.ChangeEvent) changeEventDTO {
