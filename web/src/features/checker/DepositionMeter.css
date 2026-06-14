@@ -1,0 +1,35 @@
+.hv-meter-wrap {
+  margin: var(--hv-space-5) 0 var(--hv-space-1);
+}
+
+.hv-meter {
+  position: relative;
+  height: 12px;
+  border-radius: 7px;
+  background: linear-gradient(
+    90deg,
+    var(--hv-status-defensible-solid),
+    var(--hv-status-attention-solid) 55%,
+    var(--hv-status-exposed-solid)
+  );
+}
+
+.hv-meter-needle {
+  position: absolute;
+  top: -4px;
+  width: 3px;
+  height: 20px;
+  background: var(--hv-color-ink);
+  border-radius: 2px;
+  transform: translateX(-50%);
+  transition: left var(--hv-dur-slow) var(--hv-ease);
+}
+
+.hv-meter-scale {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--hv-space-1);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--hv-color-muted);
+}

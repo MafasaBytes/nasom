@@ -81,12 +81,69 @@ export interface ExposureSnapshot {
   generatedAt: string;
 }
 
+// Per-asset dashboard read model: GET /api/portfolio returns PortfolioProject[].
+// (Mirrors httpapi.portfolioProjectDTO — an asset joined with its latest assessment and
+// latest finding. latestAssessment/latestFinding are null when the asset has none yet.)
+export interface PortfolioProject {
+  asset: Asset;
+  latestAssessment: Assessment | null;
+  latestFinding: Finding | null;
+}
+
+// Coarse buildability verdict of the INDICATIVE Surface B pre-check (ADR-001).
+// Mirrors core.CheckVerdict. Maps to a DefensibilityStatus for the UI signal.
+export type CheckVerdict =
+  | "buildable"
+  | "buildable_with_mitigation"
+  | "permit_required";
+
 // Location checker (Surface B) request/response.
 export interface CheckRequest {
   domain: DomainKey;
   inputs: unknown;                     // domain-specific (nitrogen: area, distance, homes, m2, intensity)
 }
+
+// Domain-specific nitrogen inputs (mirrors nitrogen.NitrogenInputs JSON tags).
+// Opaque to core; sent as CheckRequest.inputs.
+export interface NitrogenInputs {
+  natura2000_area: string;
+  distance_km: number;
+  homes: number;
+  commercial_m2: number;
+  build_intensity: number;             // intensity multiplier (light 1 → heavy 2.2)
+  routes?: string[];                   // offsetting routes, e.g. ["intern_salderen"]
+}
+
+// Mirrors httpapi.checkResultDTO. ADR-001: indicative, never authoritative.
+// ADR-004: verdict/mitigations are options, never guarantees.
 export interface CheckResult {
   result: AssessmentResult;
   status: DefensibilityStatus;
+  verdict: CheckVerdict;
+  mitigations: string[];
+}
+
+// POST /api/promote request body (mirrors httpapi.promoteRequestDTO).
+// ADR-004: authoredBy is the customer/consultant of record — required, never Houvast.
+export interface PromoteRequest {
+  domain: DomainKey;
+  inputs: unknown;
+  name: string;
+  authoredBy: string;
+  result: AssessmentResult;
+}
+
+// POST /api/promote response (mirrors httpapi.promoteResponseDTO).
+export interface PromoteResponse {
+  assetId: AssetId;
+}
+
+// POST /api/ingest response (DEV/ADMIN — reproduces the demo flip).
+// Mirrors httpapi.ingestResponseDTO. The collected `errors` are EXPECTED graceful
+// degradation (e.g. the gated AERIUS Connect recompute, ADR-002), not failures.
+export interface IngestResult {
+  events: ChangeEvent[];
+  findings: Finding[];
+  snapshots: ExposureSnapshot[];
+  errors: string[];
 }

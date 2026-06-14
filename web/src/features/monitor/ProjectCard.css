@@ -1,0 +1,113 @@
+.hv-card {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  width: 100%;
+  background: var(--hv-color-surface);
+  border: 1px solid var(--hv-color-line);
+  border-radius: var(--hv-radius);
+  padding: var(--hv-space-4) var(--hv-space-5);
+  box-shadow: var(--hv-shadow-1);
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  transition:
+    transform var(--hv-dur-fast),
+    box-shadow var(--hv-dur-fast),
+    border-color var(--hv-dur-slow);
+}
+
+.hv-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--hv-shadow-2);
+}
+
+.hv-card-stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: var(--card-stripe);
+}
+
+.hv-card.is-flash {
+  animation: hv-card-flash 1.1s var(--hv-ease);
+}
+
+@keyframes hv-card-flash {
+  0% {
+    background: var(--hv-color-surface);
+  }
+  28% {
+    background: var(--card-flash-bg);
+  }
+  100% {
+    background: var(--hv-color-surface);
+  }
+}
+
+.hv-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--hv-space-2);
+}
+
+.hv-card-title {
+  font: var(--hv-font-h3, 700 16px/1.35 var(--hv-font-family));
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.hv-card-indic {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  color: var(--hv-color-muted);
+  background: var(--hv-color-surface-sunk);
+  border: 1px solid var(--hv-color-line);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+.hv-card-loc {
+  font-size: 12.5px;
+  color: var(--hv-color-muted);
+  margin: 2px 0 var(--hv-space-3);
+}
+
+.hv-card-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.hv-card-row {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--hv-space-3);
+  font-size: 13px;
+  padding: 3px 0;
+  color: var(--hv-color-ink-2);
+}
+
+.hv-card-row-l {
+  color: var(--hv-color-muted);
+}
+
+.hv-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: var(--hv-space-3);
+  padding-top: var(--hv-space-3);
+  border-top: 1px solid var(--hv-color-line);
+}
+
+.hv-card-euro {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--hv-color-euro-rest);
+}

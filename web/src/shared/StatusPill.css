@@ -1,0 +1,16 @@
+.hv-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--hv-space-2);
+  font: var(--hv-font-xs, 600 12px/1.4 var(--hv-font-family));
+  font-weight: 700;
+  padding: 4px 10px 4px 8px;
+  border-radius: var(--hv-radius-pill);
+  color: var(--pill-fg);
+  background: var(--pill-bg);
+  white-space: nowrap;
+}
+
+.hv-pill svg {
+  flex: 0 0 auto;
+}
