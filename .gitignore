@@ -4,6 +4,9 @@
 *.test
 *.out
 vendor/
+# compiled cmd entrypoints accidentally built at repo root
+/api
+/worker
  
 # Node / web
 web/node_modules/

@@ -1,0 +1,117 @@
+.hv-sec-h {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--hv-space-3);
+  margin: var(--hv-space-2) 0 var(--hv-space-4);
+}
+.hv-sec-title {
+  font: var(--hv-font-h2, 700 17px/1.3 var(--hv-font-family));
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+}
+.hv-sec-hint {
+  font-size: 13px;
+  color: var(--hv-color-muted);
+}
+
+.hv-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--hv-space-4);
+}
+@media (max-width: 760px) {
+  .hv-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hv-card-skel {
+  height: 190px;
+  border-radius: var(--hv-radius);
+  background: var(--hv-color-line);
+  animation: hv-shimmer 1.3s ease-in-out infinite;
+}
+
+/* Dev-only ingest dock (DESIGN §3.5 — not the production holder view). */
+.hv-dock {
+  background: linear-gradient(135deg, var(--hv-color-navy), #15506b);
+  color: #cfe6ef;
+  border-radius: var(--hv-radius);
+  padding: var(--hv-space-4) var(--hv-space-5);
+  margin-bottom: var(--hv-space-5);
+  box-shadow: var(--hv-shadow-1);
+}
+.hv-dock-h {
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #8fc2d4;
+  font-weight: 700;
+  margin-bottom: var(--hv-space-3);
+}
+.hv-dock-btn {
+  background: var(--hv-color-surface);
+  color: var(--hv-color-navy);
+  border: none;
+  border-radius: var(--hv-radius-sm);
+  padding: 10px 16px;
+  font-size: 13.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.hv-dock-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+.hv-dock-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.hv-portfolio-error {
+  display: flex;
+  align-items: center;
+  gap: var(--hv-space-3);
+  font-size: 14px;
+  color: var(--hv-color-ink-2);
+  background: var(--hv-status-attention-bg);
+  border: 1px solid var(--hv-status-attention-line);
+  border-radius: var(--hv-radius-sm);
+  padding: var(--hv-space-3) var(--hv-space-4);
+  margin-bottom: var(--hv-space-5);
+}
+
+.hv-empty {
+  text-align: center;
+  background: var(--hv-color-surface);
+  border: 1px solid var(--hv-color-line);
+  border-radius: var(--hv-radius);
+  padding: var(--hv-space-10) var(--hv-space-6);
+  box-shadow: var(--hv-shadow-1);
+  max-width: 520px;
+  margin: var(--hv-space-8) auto;
+}
+.hv-empty-title {
+  margin: var(--hv-space-4) 0 var(--hv-space-2);
+  font-size: 18px;
+}
+.hv-empty-body {
+  color: var(--hv-color-muted);
+  font-size: 14px;
+  margin: 0 0 var(--hv-space-5);
+}
+
+.hv-btn {
+  background: var(--hv-color-accent);
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  padding: 12px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.hv-btn:hover {
+  background: var(--hv-color-accent-hover);
+}

@@ -1,0 +1,125 @@
+.hv-header {
+  background: var(--hv-color-navy);
+  color: #fff;
+  padding: 0 var(--hv-space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--hv-space-4);
+  height: 58px;
+  position: sticky;
+  top: 0;
+  z-index: var(--hv-z-header);
+}
+
+.hv-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: 0.2px;
+}
+.hv-logo small {
+  font-weight: 400;
+  color: #9fc4d4;
+  font-size: 12px;
+  margin-left: 4px;
+  letter-spacing: 0;
+}
+.hv-logo-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--hv-color-teal), #2bbfb0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hv-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: var(--hv-space-6);
+}
+.hv-tab {
+  padding: 8px 16px;
+  border-radius: var(--hv-radius-sm);
+  color: #bcd6e2;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14px;
+}
+.hv-tab:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.hv-tab.is-active {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.hv-tenant {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--hv-space-2);
+}
+.hv-tenant-lbl {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #9fc4d4;
+  font-weight: 700;
+}
+.hv-tenant select {
+  background: #1c4f6b;
+  color: #fff;
+  border: 1px solid #2c6a85;
+  border-radius: var(--hv-radius-sm);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
+.hv-wrap {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: var(--hv-space-6);
+  animation: hv-view-fade var(--hv-dur) var(--hv-ease);
+}
+
+@keyframes hv-view-fade {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.hv-footer {
+  max-width: 1180px;
+  margin: var(--hv-space-3) auto var(--hv-space-10);
+  padding: 0 var(--hv-space-6);
+  color: var(--hv-color-muted);
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .hv-header {
+    flex-wrap: wrap;
+    height: auto;
+    padding: var(--hv-space-2) var(--hv-space-4);
+    gap: var(--hv-space-2);
+  }
+  .hv-tabs {
+    margin-left: 0;
+  }
+  .hv-tenant {
+    margin-left: 0;
+  }
+}

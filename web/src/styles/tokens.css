@@ -1,0 +1,136 @@
+/* Houvast design tokens — the single source of presentation values (docs/DESIGN.md §1).
+   Every component references these; no orphan hex values, no one-off spacing.
+   Naming: --hv-{category}-{role}-{variant}. */
+
+:root {
+  /* ---- Neutral ramp (cool, calm, professional) ---- */
+  --hv-color-bg: #f4f6f8; /* app canvas */
+  --hv-color-surface: #ffffff; /* cards, panels, drawer */
+  --hv-color-surface-sunk: #fbfcfd; /* inputs, inset KV boxes */
+  --hv-color-line: #e2e8ee; /* hairline borders, dividers */
+  --hv-color-line-strong: #cdd7e0; /* stronger dividers */
+
+  --hv-color-ink: #11202e; /* primary text — 14.0:1 on surface */
+  --hv-color-ink-2: #33485a; /* secondary text — 8.0:1 on surface */
+  --hv-color-muted: #5e7488; /* tertiary/labels — 4.7:1 on surface */
+
+  /* ---- Brand (chrome only — never a status signal) ---- */
+  --hv-color-navy: #0f3a52; /* top bar */
+  --hv-color-teal: #127f88; /* logo, timeline marker, accents */
+  --hv-color-accent: #0f6fb3; /* primary action / links — 4.6:1 on surface */
+  --hv-color-accent-hover: #0c5e98;
+  --hv-color-accent-bg: #eef6fb; /* tinted action/info backgrounds */
+  --hv-color-accent-line: #cfe6f3;
+
+  /* ---- Status palette (defensible / attention / exposed) ---- */
+  /* DEFENSIBLE (green) */
+  --hv-status-defensible-fg: #15703f;
+  --hv-status-defensible-bg: #e7f5ee;
+  --hv-status-defensible-line: #bfe6d0;
+  --hv-status-defensible-solid: #1a8f5a;
+
+  /* ATTENTION (amber) */
+  --hv-status-attention-fg: #8a5a06;
+  --hv-status-attention-bg: #fdf3e1;
+  --hv-status-attention-line: #f0dcb0;
+  --hv-status-attention-solid: #c9810a;
+
+  /* EXPOSED (red) */
+  --hv-status-exposed-fg: #b3271f;
+  --hv-status-exposed-bg: #fbe9e9;
+  --hv-status-exposed-line: #f0c7c7;
+  --hv-status-exposed-solid: #cf3b3b;
+  --hv-status-exposed-ink: #9c2a2a;
+
+  /* ---- Euro emphasis ---- */
+  --hv-color-euro-rest: var(--hv-color-ink);
+  --hv-color-euro-risk: var(--hv-status-exposed-fg);
+  --hv-font-euro-size: 28px;
+  --hv-font-euro-weight: 700;
+
+  /* ---- Type ---- */
+  --hv-font-family: "Segoe UI", Roboto, Helvetica, Arial, system-ui, sans-serif;
+  --hv-font-mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+
+  /* ---- Spacing (4px grid) ---- */
+  --hv-space-1: 4px;
+  --hv-space-2: 8px;
+  --hv-space-3: 12px;
+  --hv-space-4: 16px;
+  --hv-space-5: 20px;
+  --hv-space-6: 24px;
+  --hv-space-8: 32px;
+  --hv-space-10: 40px;
+
+  /* ---- Radius ---- */
+  --hv-radius-sm: 8px;
+  --hv-radius: 12px;
+  --hv-radius-pill: 20px;
+
+  /* ---- Shadow ---- */
+  --hv-shadow-1: 0 1px 3px rgba(16, 40, 60, 0.08), 0 6px 24px rgba(16, 40, 60, 0.06);
+  --hv-shadow-2: 0 6px 22px rgba(16, 40, 60, 0.12);
+  --hv-shadow-drawer: -8px 0 30px rgba(0, 0, 0, 0.18);
+
+  /* ---- z-index ---- */
+  --hv-z-header: 50;
+  --hv-z-scrim: 60;
+  --hv-z-drawer: 70;
+  --hv-z-toast: 80;
+
+  /* ---- Motion ---- */
+  --hv-dur-fast: 0.15s;
+  --hv-dur: 0.25s;
+  --hv-dur-slow: 0.35s;
+  --hv-ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+
+  /* ---- Focus ---- */
+  --hv-focus-ring: 0 0 0 3px rgba(15, 111, 179, 0.45);
+  --hv-focus-offset: 2px;
+}
+
+/* ---- Global reset / base ---- */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--hv-font-family);
+  font-size: 15px;
+  line-height: 1.5;
+  background: var(--hv-color-bg);
+  color: var(--hv-color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Visible, consistent focus ring on every interactive surface (WCAG AA). */
+:where(button, a, input, select, [tabindex]):focus-visible {
+  outline: none;
+  box-shadow: var(--hv-focus-ring);
+  border-radius: var(--hv-radius-sm);
+}
+
+/* Tabular + lining numerals so money/metrics align in columns. */
+.hv-tnum {
+  font-variant-numeric: tabular-nums lining-nums;
+  font-feature-settings: "tnum" 1, "lnum" 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
