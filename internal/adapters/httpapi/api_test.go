@@ -149,6 +149,8 @@ func newHarness(t *testing.T) *harness {
 
 	check := app.NewCheckService(registry, portfolioRepo, assessments, fixedClock{fixedNow}, &seqIDs{prefix: "promoted"})
 
+	importer := app.NewImportService(nitrogen.NewPortfolioCSVParser(), portfolioRepo, assessments, fixedClock{fixedNow})
+
 	w := worker.New(
 		core.DomainNitrogen,
 		[]core.RuleVersionSource{releaseWatcher},
@@ -161,7 +163,7 @@ func newHarness(t *testing.T) *harness {
 	seedTwoTenants(t, ctx, portfolioRepo, assessments, findings)
 
 	return &harness{
-		router:        httpapi.NewRouter(monitor, check, w, nil),
+		router:        httpapi.NewRouter(monitor, check, importer, w, nil),
 		monitor:       monitor,
 		assess:        assessments,
 		portfolioRepo: portfolioRepo,

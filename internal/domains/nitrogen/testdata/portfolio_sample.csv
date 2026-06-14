@@ -1,0 +1,5 @@
+external_id,project_name,capital_at_risk_eur,natura2000_area,distance_km,homes,commercial_m2,build_intensity,routes,deposition_mol_ha_yr,rule_version_label,authored_by
+vdb-veluwe-noord,Woningbouw Veluwe-Noord,4200000,Veluwe,2.1,180,0,1.0,intern_salderen,0.06,AERIUS Calculator 2024,Royal HaskoningDHV
+vdb-rijntakken-kade,Kadeproject Rijntakken,7800000,Rijntakken,0.8,0,12000,1.2,extern_salderen,0.09,AERIUS Calculator 2024,Royal HaskoningDHV
+vdb-nieuwkoop-erf,Erfontwikkeling Nieuwkoop,2600000,Nieuwkoopse Plassen,3.4,42,1500,0.8,intern_salderen;extern_salderen,0.04,AERIUS Calculator 2024,Sweco Nederland
+vdb-missing-author,Project zonder auteur,1000000,Veluwe,1.0,20,0,1.0,intern_salderen,0.05,AERIUS Calculator 2024,

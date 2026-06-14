@@ -117,6 +117,36 @@ func (rt *router) handlePromote(w http.ResponseWriter, r *http.Request, t core.T
 	writeJSON(w, http.StatusCreated, promoteResponseDTO{AssetID: string(assetID)})
 }
 
+// maxImportBytes caps the CSV import request body (a generous portfolio is well under this) to bound
+// memory use on an attacker-controllable upload. Real rate limiting is a prod follow-up (ADR-015).
+const maxImportBytes = 8 << 20 // 8 MiB
+
+// handleImport: POST /api/import — CSV portfolio import (ADR-010 MVP cut). The raw request body is a
+// CSV (Content-Type text/csv); the tenant comes from the X-Tenant-ID header (ADR-006), never the body,
+// so every write is scoped to exactly one tenant. It records the consultant's EXISTING assessments so
+// the monitor can watch them — it computes nothing. Per-row problems (bad numbers, missing/forbidden
+// author) are returned in the result's `errors`; they do not fail the request. A fatal parse error
+// (e.g. missing header) is a 400.
+func (rt *router) handleImport(w http.ResponseWriter, r *http.Request, t core.TenantID) {
+	if rt.importer == nil {
+		writeError(w, http.StatusServiceUnavailable, "import is not enabled")
+		return
+	}
+	defer r.Body.Close()
+
+	// Bound the (attacker-controllable) CSV body so a huge upload can't exhaust memory.
+	body := http.MaxBytesReader(w, r.Body, maxImportBytes)
+
+	res, err := rt.importer.ImportCSV(r.Context(), t, body)
+	if err != nil {
+		// A fatal parse/IO problem (unreadable stream, missing header) is caller-correctable input.
+		rt.logger.Printf("httpapi: import failed: %v", err)
+		writeError(w, http.StatusBadRequest, "could not parse CSV (check the header row and format)")
+		return
+	}
+	writeJSON(w, http.StatusOK, toImportResultDTO(res))
+}
+
 // handleIngest: POST /api/ingest — DEV/ADMIN ONLY. Drives one keep-alive worker cycle (applies the
 // curated AERIUS-2025 release + the RvS ruling) and returns the resulting findings + exposure
 // snapshots so the UI can reproduce the demo flip. This is NOT a per-tenant endpoint — the worker

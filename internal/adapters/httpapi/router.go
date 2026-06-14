@@ -49,18 +49,19 @@ var _ Ingester = (*worker.Worker)(nil)
 type router struct {
 	monitor  app.MonitorService
 	checker  app.CheckService
-	ingester Ingester // dev/admin only; may be nil (then /api/ingest returns 503)
+	importer app.ImportService // CSV portfolio import (ADR-010); may be nil (then /api/import returns 503)
+	ingester Ingester          // dev/admin only; may be nil (then /api/ingest returns 503)
 	logger   *log.Logger
 }
 
-// NewRouter builds the HTTP handler exposing the app services. The Ingester is optional (dev/admin);
-// pass nil to disable POST /api/ingest. The logger is used for request/diagnostic logging; if nil a
-// no-op logger is used.
-func NewRouter(monitor app.MonitorService, checker app.CheckService, ingester Ingester, logger *log.Logger) http.Handler {
+// NewRouter builds the HTTP handler exposing the app services. The ImportService and Ingester are
+// optional; pass nil to disable POST /api/import and POST /api/ingest respectively. The logger is
+// used for request/diagnostic logging; if nil a no-op logger is used.
+func NewRouter(monitor app.MonitorService, checker app.CheckService, importer app.ImportService, ingester Ingester, logger *log.Logger) http.Handler {
 	if logger == nil {
 		logger = log.New(noopWriter{}, "", 0)
 	}
-	rt := &router{monitor: monitor, checker: checker, ingester: ingester, logger: logger}
+	rt := &router{monitor: monitor, checker: checker, importer: importer, ingester: ingester, logger: logger}
 
 	mux := http.NewServeMux()
 	// Go 1.22 method+path patterns. Every handler below is wrapped in tenantMiddleware, so it only
@@ -70,6 +71,7 @@ func NewRouter(monitor app.MonitorService, checker app.CheckService, ingester In
 	mux.Handle("GET /api/assessments/{id}/findings", rt.tenant(rt.handleFindings))
 	mux.Handle("POST /api/check", rt.tenant(rt.handleCheck))
 	mux.Handle("POST /api/promote", rt.tenant(rt.handlePromote))
+	mux.Handle("POST /api/import", rt.tenant(rt.handleImport)) // CSV portfolio import (ADR-010)
 	mux.Handle("POST /api/ingest", rt.tenant(rt.handleIngest)) // DEV/ADMIN — reproduces the demo flip
 
 	// Health check is intentionally NOT tenant-scoped (no tenant data).
@@ -89,6 +91,7 @@ func Routes() []string {
 		"GET  /api/assessments/{id}/findings",
 		"POST /api/check",
 		"POST /api/promote",
+		"POST /api/import   (text/csv)",
 		"POST /api/ingest   (dev/admin)",
 		"GET  /healthz",
 	}
